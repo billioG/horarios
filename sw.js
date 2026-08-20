@@ -1,4 +1,4 @@
-const CACHE = 'asistencia-v6';
+const CACHE = 'asistencia-v7';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -28,7 +28,13 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  const req = e.request;
+  // Solo cachear GET del propio origen (los archivos de la app). Todo lo demás
+  // — en particular las llamadas POST/PUT/PATCH/DELETE a la Edge Function en
+  // otro dominio — se deja pasar sin tocar. Interceptarlas rompía esas
+  // peticiones ("Failed to fetch") porque no tiene sentido cachear escrituras.
+  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   e.respondWith(
-    caches.match(e.request).then((resp) => resp || fetch(e.request))
+    caches.match(req).then((resp) => resp || fetch(req))
   );
 });
