@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Control de Asistencia con Huella</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon.svg">
+<link rel="stylesheet" href="./styles.css">
+<meta name="theme-color" content="#0f172a">
+</head>
+<body>
+<div class="contenedor">
+  <h1>👆 Control de Asistencia</h1>
+  <p class="subtitulo">Entrada y salida verificadas con huella — offline con sincronización a la nube</p>
+
+  <div id="estado" class="estado info"></div>
+
+  <div class="tabs">
+    <button class="tab-btn activa" data-tab="marcar">Marcar</button>
+    <button class="tab-btn" data-tab="horarios">Horarios</button>
+    <button class="tab-btn" data-tab="reportes">Reportes</button>
+  </div>
+
+  <!-- Tab: Marcar -->
+  <div id="tab-marcar" class="tab-panel activa">
+    <div class="panel">
+      <h2>Registrar empleado</h2>
+      <form id="form-nuevo">
+        <input type="text" id="input-nombre" placeholder="Nombre del empleado" required>
+        <button type="submit">Guardar huella</button>
+      </form>
+    </div>
+    <div class="panel">
+      <h2>Empleados</h2>
+      <div id="lista-empleados"></div>
+    </div>
+  </div>
+
+  <!-- Tab: Horarios -->
+  <div id="tab-horarios" class="tab-panel">
+    <div class="panel">
+      <h2>Horario semanal por empleado</h2>
+      <select id="horario-empleado"></select>
+      <div id="filas-horario"></div>
+      <button id="btn-guardar-horario">💾 Guardar horario</button>
+    </div>
+  </div>
+
+  <!-- Tab: Reportes -->
+  <div id="tab-reportes" class="tab-panel">
+    <div class="panel">
+      <h2>Reporte de horas</h2>
+      <div class="filtros-reporte">
+        <select id="reporte-empleado"></select>
+        <input type="date" id="reporte-desde">
+        <input type="date" id="reporte-hasta">
+        <button id="btn-generar-reporte">Generar</button>
+      </div>
+      <div id="contenedor-reporte"></div>
+      <button id="btn-exportar-reporte">⬇ Exportar CSV</button>
+    </div>
+  </div>
+</div>
+
+<script src="./config.js"></script>
+<script src="./db.js"></script>
+<script src="./cloud.js"></script>
+<script src="./app.js"></script>
+<script src="./horarios.js"></script>
+<script src="./reportes.js"></script>
+</body>
+</html>
