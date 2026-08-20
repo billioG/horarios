@@ -28,8 +28,10 @@
       <h2>Registrar empleado</h2>
       <form id="form-nuevo">
         <input type="text" id="input-nombre" placeholder="Nombre del empleado" required>
+        <input type="tel" id="input-pin" placeholder="PIN (4 dígitos)" inputmode="numeric" pattern="\d{4,6}" maxlength="6" required>
         <button type="submit">Guardar huella</button>
       </form>
+      <p class="nota-pin">El PIN es lo que identifica a cada persona en un teléfono compartido — la huella solo confirma que el teléfono sigue en manos autorizadas.</p>
     </div>
     <div class="panel">
       <h2>Empleados</h2>
@@ -59,6 +61,29 @@
       </div>
       <div id="contenedor-reporte"></div>
       <button id="btn-exportar-reporte">⬇ Exportar CSV</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-pin" class="modal oculto">
+  <div class="modal-caja">
+    <h3 id="modal-pin-titulo">Ingresa tu PIN</h3>
+    <input type="tel" id="modal-pin-input" inputmode="numeric" pattern="\d{4,6}" maxlength="6" autocomplete="off" placeholder="••••">
+    <div class="modal-botones">
+      <button id="modal-pin-cancelar" type="button">Cancelar</button>
+      <button id="modal-pin-confirmar" type="button">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-sesion" class="modal oculto">
+  <div class="modal-caja">
+    <h3 id="modal-sesion-titulo">¿Quién eres?</h3>
+    <select id="modal-sesion-empleado"></select>
+    <input type="tel" id="modal-sesion-pin" inputmode="numeric" pattern="\d{4,6}" maxlength="6" autocomplete="off" placeholder="Tu PIN">
+    <div class="modal-botones">
+      <button id="modal-sesion-cancelar" type="button">Cancelar</button>
+      <button id="modal-sesion-confirmar" type="button">Entrar</button>
     </div>
   </div>
 </div>

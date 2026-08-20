@@ -72,7 +72,7 @@ btnGuardarHorario.addEventListener('click', async () => {
     };
   });
   try {
-    await nubeGuardarHorarios(empleadoId, dias);
+    await nubeGuardarHorarios(empleadoId, dias, sesionActual);
     await cachearHorarios(dias.map(d => ({ ...d, empleado_id: empleadoId })));
     mostrarEstado('Horario guardado.', 'ok');
   } catch (err) {

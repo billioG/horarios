@@ -21,8 +21,8 @@ async function llamarFuncion(ruta, opciones = {}) {
 }
 
 // ---- Empleados ----
-async function nubeCrearEmpleado(nombre) {
-  return llamarFuncion('/empleados', { method: 'POST', body: JSON.stringify({ nombre }) });
+async function nubeCrearEmpleado(nombre, pin) {
+  return llamarFuncion('/empleados', { method: 'POST', body: JSON.stringify({ nombre, pin }) });
 }
 async function nubeListarEmpleados() {
   return llamarFuncion('/empleados');
@@ -30,10 +30,13 @@ async function nubeListarEmpleados() {
 async function nubeBorrarEmpleado(id) {
   return llamarFuncion(`/empleados/${id}`, { method: 'DELETE' });
 }
+async function nubeActualizarPin(id, pin) {
+  return llamarFuncion(`/empleados/${id}`, { method: 'PATCH', body: JSON.stringify({ pin }) });
+}
 
 // ---- Horarios ----
-async function nubeGuardarHorarios(empleadoId, dias) {
-  return llamarFuncion(`/horarios/${empleadoId}`, { method: 'PUT', body: JSON.stringify({ dias }) });
+async function nubeGuardarHorarios(empleadoId, dias, autorizador) {
+  return llamarFuncion(`/horarios/${empleadoId}`, { method: 'PUT', body: JSON.stringify({ dias, autorizador }) });
 }
 async function nubeListarHorarios(empleadoId) {
   return llamarFuncion(`/horarios?empleado_id=${encodeURIComponent(empleadoId)}`);
@@ -46,11 +49,15 @@ async function nubeListarTodosHorarios() {
 async function nubeInsertarRegistro(registro) {
   return llamarFuncion('/registros', { method: 'POST', body: JSON.stringify(registro) });
 }
-async function nubeListarRegistros({ empleadoId = null, desde = null, hasta = null } = {}) {
+async function nubeListarRegistros({ empleadoId = null, desde = null, hasta = null, autorizador = null } = {}) {
   const params = new URLSearchParams();
   if (empleadoId) params.set('empleado_id', empleadoId);
   if (desde) params.set('desde', desde);
   if (hasta) params.set('hasta', hasta);
+  if (!empleadoId && autorizador) {
+    params.set('autorizador_id', autorizador.id);
+    params.set('autorizador_pin', autorizador.pin);
+  }
   const qs = params.toString();
   return llamarFuncion(`/registros${qs ? '?' + qs : ''}`);
 }

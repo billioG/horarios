@@ -8,9 +8,16 @@ const contenedorReporte = document.querySelector('#contenedor-reporte');
 let ultimoReporte = null; // guarda filas para exportar CSV
 
 async function cargarSelectorReportes() {
-  const empleados = await obtenerEmpleadosCache();
-  selReporteEmpleado.innerHTML = '<option value="">Todos</option>' +
-    empleados.sort((a, b) => a.nombre.localeCompare(b.nombre)).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+  if (!sesionActual.es_encargado) {
+    // Empleado normal: solo su propio reporte, sin selector.
+    selReporteEmpleado.innerHTML = `<option value="${sesionActual.id}">${sesionActual.nombre} (tú)</option>`;
+    selReporteEmpleado.disabled = true;
+  } else {
+    const empleados = await obtenerEmpleadosCache();
+    selReporteEmpleado.disabled = false;
+    selReporteEmpleado.innerHTML = '<option value="">Todos</option>' +
+      empleados.sort((a, b) => a.nombre.localeCompare(b.nombre)).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
+  }
 
   if (!inputHasta.value) {
     const hoy = new Date();
@@ -20,10 +27,6 @@ async function cargarSelectorReportes() {
   }
 }
 
-function fechaLocalDe(iso) {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 function diaSemanaISO(fechaYYYYMMDD) {
   const d = new Date(fechaYYYYMMDD + 'T12:00:00');
   const dia = d.getDay();
@@ -56,11 +59,12 @@ async function generarReporte() {
   empleados = await obtenerEmpleadosCache();
   if (nubeDisponible()) {
     try {
-      registros = await nubeListarRegistros({ empleadoId, desde, hasta });
+      registros = await nubeListarRegistros({ empleadoId, desde, hasta, autorizador: sesionActual });
       horarios = await nubeListarTodosHorarios();
       await cachearRegistros(registros);
     } catch (err) {
       console.error(err);
+      mostrarEstado('No se pudo generar el reporte: ' + err.message, 'error');
       registros = (await obtenerRegistrosCache({ empleadoId })).filter(r => (!desde || r.marca >= desde) && (!hasta || r.marca <= hasta));
       horarios = await obtenerHorariosCache();
     }
