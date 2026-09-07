@@ -152,6 +152,19 @@ button {
   color: var(--acento-texto);
 }
 
+.panel-marcar { text-align: center; }
+#btn-marcar-generico {
+  width: 100%;
+  padding: 22px;
+  border-radius: 12px;
+  border: none;
+  background: var(--acento);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.panel-marcar .nota-pin { margin-top: 14px; }
+
 .btn-marcar.entrada { background: var(--verde); }
 .btn-marcar.salida { background: var(--rojo); color: #fff; }
 .btn-marcar:disabled { opacity: 0.5; }

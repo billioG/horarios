@@ -22,6 +22,7 @@
 
   <div class="tabs">
     <button class="tab-btn activa" data-tab="marcar">Marcar</button>
+    <button class="tab-btn oculto" data-tab="empleados">Empleados</button>
     <button class="tab-btn oculto" data-tab="horarios">Horarios</button>
     <button class="tab-btn oculto" data-tab="reportes">Reportes</button>
   </div>
@@ -29,6 +30,14 @@
 
   <!-- Tab: Marcar -->
   <div id="tab-marcar" class="tab-panel activa">
+    <div class="panel panel-marcar">
+      <button id="btn-marcar-generico">👆 Marcar entrada / salida</button>
+      <p class="nota-pin">Toca el botón, ingresa tu PIN y listo. El PIN identifica a cada quien — no hace falta buscar tu nombre en una lista.</p>
+    </div>
+  </div>
+
+  <!-- Tab: Empleados (solo encargado, o al arrancar sin nadie registrado) -->
+  <div id="tab-empleados" class="tab-panel">
     <div class="panel">
       <h2>Registrar empleado</h2>
       <form id="form-nuevo">
@@ -36,7 +45,7 @@
         <input type="tel" id="input-pin" placeholder="PIN (4 dígitos)" inputmode="numeric" pattern="\d{4,6}" maxlength="6" required>
         <button type="submit">Registrar</button>
       </form>
-      <p class="nota-pin">El PIN alcanza para marcar entrada/salida. La huella es opcional — si este dispositivo la soporta, se ofrece vincularla también, pero no es obligatoria.</p>
+      <p class="nota-pin">La huella es opcional — si este dispositivo la soporta, se ofrece vincularla también, pero no es obligatoria.</p>
     </div>
     <div class="panel">
       <h2>Empleados</h2>

@@ -60,6 +60,15 @@ async function hashPin(pin, salt) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}:${pin}`));
   return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
+// Busca a quién pertenece un PIN probándolo contra todos los empleados en caché
+// (el salt es el id de cada uno, así que no hay atajo: hay que probar uno por uno).
+async function encontrarEmpleadoPorPin(pin) {
+  const empleados = await obtenerEmpleadosCache();
+  for (const emp of empleados) {
+    if (emp.pin_hash && (await hashPin(pin, emp.id)) === emp.pin_hash) return emp;
+  }
+  return null;
+}
 
 // ---- modal de PIN ----
 const modalPin = $('#modal-pin');
@@ -170,15 +179,9 @@ async function refrescarEmpleados() {
     vistaEmpleados.innerHTML = '<p class="vacio">Sin empleados registrados todavía.</p>';
     return;
   }
-  const hoy = fechaLocalDe(new Date().toISOString());
   for (const emp of empleados.sort((a, b) => a.nombre.localeCompare(b.nombre))) {
     const registros = await obtenerRegistrosCache({ empleadoId: emp.id });
     const ultimo = registros[0] || null;
-    const registrosHoy = registros.filter(r => fechaLocalDe(r.marca) === hoy);
-    const entradaHoy = registrosHoy.find(r => r.tipo === 'entrada');
-    const salidaHoy = registrosHoy.find(r => r.tipo === 'salida');
-    const jornadaCompleta = !!entradaHoy && !!salidaHoy;
-    const proximo = !entradaHoy ? 'entrada' : 'salida';
     const cred = credPorEmpleado[emp.id];
 
     const card = document.createElement('div');
@@ -191,14 +194,11 @@ async function refrescarEmpleados() {
       <div class="fila-estado">Último: ${ultimo ? `${ultimo.tipo} · ${fmtFecha(ultimo.marca)}` : '—'}
         <button class="btn-pin" data-id="${emp.id}" data-nombre="${emp.nombre}">🔑 ${emp.pin_hash ? 'Cambiar PIN' : 'Fijar PIN'}</button>
       </div>
-      ${jornadaCompleta
-        ? `<p class="jornada-completa">✅ Entrada y salida ya marcadas hoy.</p>`
-        : !emp.pin_hash
-          ? `<p class="vacio">Fija un PIN para poder marcar.</p>`
-          : `
-            <button class="btn-marcar ${proximo}" data-id="${emp.id}" data-cred="${cred || ''}" data-tipo="${proximo}" data-pinhash="${emp.pin_hash}">👆 Marcar ${proximo}</button>
-            ${!cred ? `<button class="btn-vincular" data-id="${emp.id}" data-nombre="${emp.nombre}" data-pinhash="${emp.pin_hash}">🔗 Vincular huella en este dispositivo (opcional)</button>` : ''}
-          `
+      ${!emp.pin_hash
+        ? `<p class="vacio">Sin PIN todavía — no podrá marcar hasta fijarle uno.</p>`
+        : cred
+          ? `<p class="vacio">🔗 Huella vinculada en este dispositivo.</p>`
+          : `<button class="btn-vincular" data-id="${emp.id}" data-nombre="${emp.nombre}" data-pinhash="${emp.pin_hash}">🔗 Vincular huella en este dispositivo (opcional)</button>`
       }
     `;
     vistaEmpleados.appendChild(card);
@@ -241,7 +241,6 @@ formNuevo.addEventListener('submit', async (e) => {
 });
 
 vistaEmpleados.addEventListener('click', async (e) => {
-  const btnMarcar = e.target.closest('.btn-marcar');
   const btnBorrar = e.target.closest('.btn-borrar');
   const btnVincular = e.target.closest('.btn-vincular');
   const btnPin = e.target.closest('.btn-pin');
@@ -261,50 +260,6 @@ vistaEmpleados.addEventListener('click', async (e) => {
     } catch (err) {
       console.error(err);
       mostrarEstado('No se pudo actualizar el PIN: ' + err.message, 'error');
-    }
-  }
-
-  if (btnMarcar) {
-    const empleado_id = btnMarcar.dataset.id;
-    const cred = btnMarcar.dataset.cred;
-    const tipo = btnMarcar.dataset.tipo;
-    const pinHash = btnMarcar.dataset.pinhash;
-    btnMarcar.disabled = true;
-    try {
-      const pin = await pedirPin(`PIN de ${btnMarcar.closest('.card-empleado').querySelector('strong').textContent}`);
-      if (pin === null) return;
-      if (!pinHash || (await hashPin(pin, empleado_id)) !== pinHash) {
-        return mostrarEstado('PIN incorrecto.', 'error');
-      }
-      // Revalida contra el caché justo antes de escribir, por si otra pestaña
-      // o un doble toque ya marcó esta entrada/salida mientras se pedía el PIN/huella.
-      const hoy = fechaLocalDe(new Date().toISOString());
-      const yaMarcadoHoy = (await obtenerRegistrosCache({ empleadoId: empleado_id }))
-        .some(r => r.tipo === tipo && fechaLocalDe(r.marca) === hoy);
-      if (yaMarcadoHoy) {
-        mostrarEstado(`Ya se había marcado ${tipo} hoy para esta persona.`, 'error');
-        return await refrescarEmpleados();
-      }
-      // La huella es una capa extra, solo si este dispositivo ya la tiene vinculada
-      // para esta persona. El PIN por sí solo alcanza para marcar.
-      if (cred) {
-        mostrarEstado('Verifica tu huella…', 'info');
-        const ok = await verificarHuella(cred);
-        if (!ok) throw new Error('Verificación fallida.');
-      }
-      const registro = { id: uuid(), empleado_id, tipo, marca: new Date().toISOString() };
-      await cachearRegistro(registro);
-      if (nubeDisponible()) {
-        try { await nubeInsertarRegistro(registro); }
-        catch (err) { console.error(err); await encolarRegistro(registro); }
-      } else {
-        await encolarRegistro(registro);
-      }
-      mostrarEstado(`Marca de ${tipo} registrada${nubeDisponible() ? '' : ' (guardada, se subirá al recuperar conexión)'}.`, 'ok');
-      await refrescarEmpleados();
-    } catch (err) {
-      console.error(err);
-      mostrarEstado('No se pudo verificar la huella: ' + err.message, 'error');
     }
   }
 
@@ -341,12 +296,67 @@ vistaEmpleados.addEventListener('click', async (e) => {
   }
 });
 
+// ---- Botón único de Marcar: el PIN identifica a la persona, sin listar nombres ----
+document.querySelector('#btn-marcar-generico').addEventListener('click', async () => {
+  const pin = await pedirPin('Ingresa tu PIN');
+  if (pin === null) return;
+
+  const emp = await encontrarEmpleadoPorPin(pin);
+  if (!emp) return mostrarEstado('PIN incorrecto.', 'error');
+
+  const hoy = fechaLocalDe(new Date().toISOString());
+  const registrosHoy = (await obtenerRegistrosCache({ empleadoId: emp.id })).filter(r => fechaLocalDe(r.marca) === hoy);
+  const entradaHoy = registrosHoy.find(r => r.tipo === 'entrada');
+  const salidaHoy = registrosHoy.find(r => r.tipo === 'salida');
+  if (entradaHoy && salidaHoy) {
+    return mostrarEstado(`${emp.nombre}: ya se marcó entrada y salida hoy.`, 'error');
+  }
+  const tipo = !entradaHoy ? 'entrada' : 'salida';
+
+  try {
+    // La huella es una capa extra, solo si este dispositivo ya la tiene vinculada
+    // para esta persona. El PIN por sí solo alcanza para marcar.
+    const credencial = await obtenerCredencialLocal(emp.id);
+    if (credencial) {
+      mostrarEstado('Verifica tu huella…', 'info');
+      const ok = await verificarHuella(credencial.credentialId);
+      if (!ok) throw new Error('Verificación fallida.');
+    }
+
+    const registro = { id: uuid(), empleado_id: emp.id, tipo, marca: new Date().toISOString() };
+    await cachearRegistro(registro);
+    if (nubeDisponible()) {
+      try { await nubeInsertarRegistro(registro); }
+      catch (err) { console.error(err); await encolarRegistro(registro); }
+    } else {
+      await encolarRegistro(registro);
+    }
+    mostrarEstado(`${tipo === 'entrada' ? 'Entrada' : 'Salida'} registrada para ${emp.nombre}${nubeDisponible() ? '' : ' (guardada, se subirá al recuperar conexión)'}.`, 'ok');
+
+    if (!credencial && soporteWebAuthn()) {
+      if (confirm(`¿Vincular tu huella en este dispositivo para la próxima vez, ${emp.nombre}? Es opcional.`)) {
+        try {
+          const credentialId = await registrarHuella(emp.nombre, emp.id);
+          await guardarCredencialLocal(emp.id, credentialId, emp.nombre);
+          mostrarEstado(`Huella vinculada para ${emp.nombre}.`, 'ok');
+        } catch (err) {
+          console.warn('Huella no vinculada (opcional):', err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    mostrarEstado('No se pudo verificar la huella: ' + err.message, 'error');
+  }
+});
+
 // ---- Tabs ----
 function irATab(destino) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('activa'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('activa'));
   document.querySelector(`.tab-btn[data-tab="${destino}"]`).classList.add('activa');
   document.querySelector(`#tab-${destino}`).classList.add('activa');
+  if (destino === 'empleados') refrescarEmpleados();
   if (destino === 'horarios') cargarSelectorHorarios();
   if (destino === 'reportes') cargarSelectorReportes();
 }
@@ -362,7 +372,7 @@ document.querySelector('#btn-acceso-encargado').addEventListener('click', async 
   if (!emp) return;
   if (!emp.es_encargado) return mostrarEstado('Ese PIN no pertenece a un encargado.', 'error');
   sesionActual = emp;
-  document.querySelectorAll('.tab-btn[data-tab="horarios"], .tab-btn[data-tab="reportes"]').forEach(b => b.classList.remove('oculto'));
+  document.querySelectorAll('.tab-btn[data-tab="empleados"], .tab-btn[data-tab="horarios"], .tab-btn[data-tab="reportes"]').forEach(b => b.classList.remove('oculto'));
   document.querySelector('#btn-acceso-encargado').classList.add('oculto');
   mostrarEstado(`Acceso de encargado: ${emp.nombre}.`, 'ok');
   irATab('horarios');
@@ -374,13 +384,17 @@ if ('serviceWorker' in navigator) {
 }
 window.addEventListener('online', async () => { mostrarEstado('Conexión recuperada, sincronizando…', 'info'); await sincronizar(); await refrescarEmpleados(); mostrarEstado('Sincronizado.', 'ok'); });
 
-if (!soporteWebAuthn()) {
-  mostrarEstado('Advertencia: este navegador/contexto no soporta huella (WebAuthn). Abre la app por https:// o http://localhost.', 'error');
-} else if (!nubeConfigurada()) {
+if (!nubeConfigurada()) {
   mostrarEstado('Advertencia: falta configurar FUNCTION_URL (config.js). Funcionando solo con datos locales de este dispositivo.', 'error');
 }
 
 (async () => {
   await sincronizar();
   await refrescarEmpleados();
+  // Primer arranque sin nadie registrado todavía: deja la pestaña Empleados
+  // abierta para poder crear al primer encargado (después queda gated como las demás).
+  const empleados = await obtenerEmpleadosCache();
+  if (empleados.length === 0) {
+    document.querySelector('.tab-btn[data-tab="empleados"]').classList.remove('oculto');
+  }
 })();
