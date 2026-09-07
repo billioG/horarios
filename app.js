@@ -193,9 +193,12 @@ async function refrescarEmpleados() {
       </div>
       ${jornadaCompleta
         ? `<p class="jornada-completa">✅ Entrada y salida ya marcadas hoy.</p>`
-        : cred
-          ? `<button class="btn-marcar ${proximo}" data-id="${emp.id}" data-cred="${cred}" data-tipo="${proximo}" data-pinhash="${emp.pin_hash || ''}">👆 Marcar ${proximo}</button>`
-          : `<button class="btn-vincular" data-id="${emp.id}" data-nombre="${emp.nombre}" data-pinhash="${emp.pin_hash || ''}">🔗 Vincular huella en este dispositivo</button>`
+        : !emp.pin_hash
+          ? `<p class="vacio">Fija un PIN para poder marcar.</p>`
+          : `
+            <button class="btn-marcar ${proximo}" data-id="${emp.id}" data-cred="${cred || ''}" data-tipo="${proximo}" data-pinhash="${emp.pin_hash}">👆 Marcar ${proximo}</button>
+            ${!cred ? `<button class="btn-vincular" data-id="${emp.id}" data-nombre="${emp.nombre}" data-pinhash="${emp.pin_hash}">🔗 Vincular huella en este dispositivo (opcional)</button>` : ''}
+          `
       }
     `;
     vistaEmpleados.appendChild(card);
@@ -208,18 +211,29 @@ formNuevo.addEventListener('submit', async (e) => {
   const pin = inputPin.value.trim();
   if (!nombre) return;
   if (!/^\d{4,6}$/.test(pin)) return mostrarEstado('El PIN debe tener de 4 a 6 dígitos.', 'error');
-  if (!soporteWebAuthn()) return mostrarEstado('Este navegador no soporta huella (WebAuthn).', 'error');
   if (!nubeDisponible()) return mostrarEstado('Se necesita conexión a internet para dar de alta un empleado nuevo.', 'error');
   try {
     const emp = await nubeCrearEmpleado(nombre, pin);
-    mostrarEstado('Coloca tu huella para registrarte…', 'info');
-    const credentialId = await registrarHuella(nombre, emp.id);
-    await guardarCredencialLocal(emp.id, credentialId, nombre);
     await cachearEmpleados([emp]);
     inputNombre.value = '';
     inputPin.value = '';
-    mostrarEstado(`Huella y PIN registrados para ${nombre}.`, 'ok');
+    mostrarEstado(`PIN registrado para ${nombre}.`, 'ok');
     await refrescarEmpleados();
+
+    // La huella es opcional: se ofrece de una vez si el dispositivo la soporta,
+    // pero si falla o se cancela, el empleado ya quedó usable solo con PIN.
+    if (soporteWebAuthn()) {
+      try {
+        mostrarEstado('Coloca tu huella para vincularla también (opcional)…', 'info');
+        const credentialId = await registrarHuella(nombre, emp.id);
+        await guardarCredencialLocal(emp.id, credentialId, nombre);
+        mostrarEstado(`PIN y huella registrados para ${nombre}.`, 'ok');
+        await refrescarEmpleados();
+      } catch (err) {
+        console.warn('Huella no vinculada (opcional):', err);
+        mostrarEstado(`${nombre} quedó registrado con PIN. Puedes vincular huella después, es opcional.`, 'ok');
+      }
+    }
   } catch (err) {
     console.error(err);
     mostrarEstado('No se pudo registrar: ' + err.message, 'error');
@@ -271,9 +285,13 @@ vistaEmpleados.addEventListener('click', async (e) => {
         mostrarEstado(`Ya se había marcado ${tipo} hoy para esta persona.`, 'error');
         return await refrescarEmpleados();
       }
-      mostrarEstado('Verifica tu huella…', 'info');
-      const ok = await verificarHuella(cred);
-      if (!ok) throw new Error('Verificación fallida.');
+      // La huella es una capa extra, solo si este dispositivo ya la tiene vinculada
+      // para esta persona. El PIN por sí solo alcanza para marcar.
+      if (cred) {
+        mostrarEstado('Verifica tu huella…', 'info');
+        const ok = await verificarHuella(cred);
+        if (!ok) throw new Error('Verificación fallida.');
+      }
       const registro = { id: uuid(), empleado_id, tipo, marca: new Date().toISOString() };
       await cachearRegistro(registro);
       if (nubeDisponible()) {

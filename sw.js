@@ -1,4 +1,4 @@
-const CACHE = 'asistencia-v14';
+const CACHE = 'asistencia-v15';
 const ARCHIVOS = [
   './',
   './index.html',

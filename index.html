@@ -16,7 +16,7 @@
   <div class="marca">
     <img src="./pc.png" alt="PACA CENTRAL" class="logo">
   </div>
-  <p class="subtitulo">Control de Asistencia — entrada y salida verificadas con huella, offline con sincronización a la nube</p>
+  <p class="subtitulo">Control de Asistencia — entrada y salida con PIN o huella, offline con sincronización a la nube</p>
 
   <div id="estado" class="estado info"></div>
 
@@ -34,9 +34,9 @@
       <form id="form-nuevo">
         <input type="text" id="input-nombre" placeholder="Nombre del empleado" required>
         <input type="tel" id="input-pin" placeholder="PIN (4 dígitos)" inputmode="numeric" pattern="\d{4,6}" maxlength="6" required>
-        <button type="submit">Guardar huella</button>
+        <button type="submit">Registrar</button>
       </form>
-      <p class="nota-pin">El PIN es lo que identifica a cada persona en un teléfono compartido — la huella solo confirma que el teléfono sigue en manos autorizadas.</p>
+      <p class="nota-pin">El PIN alcanza para marcar entrada/salida. La huella es opcional — si este dispositivo la soporta, se ofrece vincularla también, pero no es obligatoria.</p>
     </div>
     <div class="panel">
       <h2>Empleados</h2>
