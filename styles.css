@@ -28,10 +28,15 @@ body {
   margin: 0 auto;
 }
 
-h1 {
-  font-size: 1.3rem;
-  text-align: center;
+.marca {
+  display: flex;
+  justify-content: center;
   margin: 8px 0 4px;
+}
+.marca .logo {
+  max-width: 200px;
+  width: 100%;
+  height: auto;
 }
 
 .subtitulo {
@@ -404,7 +409,7 @@ button {
   border-color: var(--acento);
 }
 
-#btn-exportar-reporte {
+#btn-exportar-reporte, #btn-exportar-planilla {
   width: 100%;
   margin-top: 12px;
   padding: 10px;

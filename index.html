@@ -3,16 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Control de Asistencia con Huella</title>
+<title>PACA CENTRAL — Control de Asistencia</title>
 <link rel="manifest" href="./manifest.json">
-<link rel="icon" href="./icon.svg">
+<link rel="icon" href="./icon-pc.png">
+<link rel="apple-touch-icon" href="./icon-pc.png">
 <link rel="stylesheet" href="./styles.css">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#e30613">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="contenedor">
-  <h1>👆 Control de Asistencia</h1>
-  <p class="subtitulo">Entrada y salida verificadas con huella — offline con sincronización a la nube</p>
+  <div class="marca">
+    <img src="./pc.jpg" alt="PACA CENTRAL" class="logo">
+  </div>
+  <p class="subtitulo">Control de Asistencia — entrada y salida verificadas con huella, offline con sincronización a la nube</p>
 
   <div id="estado" class="estado info"></div>
 
@@ -61,6 +65,7 @@
       </div>
       <div id="contenedor-reporte"></div>
       <button id="btn-exportar-reporte">⬇ Exportar CSV</button>
+      <button id="btn-exportar-planilla">📊 Exportar planilla de pago (XLSX)</button>
     </div>
   </div>
 </div>
