@@ -6,6 +6,7 @@ const btnExportarReporte = document.querySelector('#btn-exportar-reporte');
 const contenedorReporte = document.querySelector('#contenedor-reporte');
 
 let ultimoReporte = null; // guarda filas para exportar CSV
+let ultimoCrudo = null; // { registros, horarios, empleados, desde, hasta } — para exportar la planilla XLSX
 
 async function cargarSelectorReportes() {
   if (!sesionActual.es_encargado) {
@@ -115,6 +116,7 @@ async function generarReporte() {
   filas.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.empleado.localeCompare(b.empleado));
 
   ultimoReporte = filas;
+  ultimoCrudo = { registros, horarios, empleados, desde: inputDesde.value, hasta: inputHasta.value };
   renderReporte(filas);
 }
 
@@ -156,6 +158,133 @@ function renderReporte(filas) {
     <p class="nota-reporte">⚠️ = turno sin salida marcada todavía. "Extra" = horas trabajadas por encima del horario configurado ese día (día sin horario configurado cuenta todo como extra).</p>
   `;
 }
+
+// ---- Exportar planilla de pago (XLSX), mismo formato que planilla_pago_PC.xlsx ----
+const btnExportarPlanilla = document.querySelector('#btn-exportar-planilla');
+
+function enumerarFechas(desdeStr, hastaStr) {
+  const fechas = [];
+  const cur = new Date(desdeStr + 'T00:00:00');
+  const fin = new Date(hastaStr + 'T00:00:00');
+  while (cur <= fin) {
+    fechas.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return fechas;
+}
+function formatFechaDDMMYYYY(ymd) {
+  const [y, m, d] = ymd.split('-');
+  return `${d}/${m}/${y}`;
+}
+function formatHoraAMPM(iso) {
+  const d = new Date(iso);
+  let h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+const ENCABEZADO_PLANILLA = [
+  'NOMBRE DEL EMPLEADO', '', 'FECHA', 'HORA DE\nCOMIENZO', 'HORA DE\nFINALIZACIÓN',
+  'HORARIO REGULAR', 'HORAS EXTRAS', 'ENFERMO', 'DESCANSO', 'DÍA FESTIVO', 'Almuerzo/Refa', 'TOTAL DE HORAS',
+];
+const TARIFAS_DEFECTO = { F: 20, G: 30, H: 20, I: 20, J: 20, K: 20 };
+
+btnExportarPlanilla.addEventListener('click', () => {
+  if (typeof XLSX === 'undefined') return mostrarEstado('No se pudo cargar la librería de Excel (revisa tu conexión).', 'error');
+  if (!ultimoCrudo) return mostrarEstado('Genera el reporte primero.', 'error');
+  const { registros, horarios, empleados, desde, hasta } = ultimoCrudo;
+  if (!desde || !hasta) return mostrarEstado('Selecciona un rango de fechas.', 'error');
+
+  const horarioPorEmpDia = {};
+  for (const h of horarios) horarioPorEmpDia[`${h.empleado_id}_${h.dia_semana}`] = h;
+
+  const empleadoIdSel = selReporteEmpleado.value || null;
+  const empleadosAExportar = empleadoIdSel ? empleados.filter(e => e.id === empleadoIdSel) : empleados;
+  if (empleadosAExportar.length === 0) return mostrarEstado('No hay empleados para exportar.', 'error');
+
+  const fechas = enumerarFechas(desde, hasta);
+  const wb = XLSX.utils.book_new();
+  const nombresUsados = new Set();
+
+  for (const emp of empleadosAExportar) {
+    const marcasPorFecha = {};
+    for (const r of registros.filter(r => r.empleado_id === emp.id)) {
+      const f = fechaLocalDe(r.marca);
+      (marcasPorFecha[f] ??= []).push(r);
+    }
+
+    const regularPorDia = [], extraPorDia = [];
+    const filasDatos = fechas.map((f, i) => {
+      const marcas = (marcasPorFecha[f] || []).sort((a, b) => a.marca.localeCompare(b.marca));
+      const entrada = marcas.find(m => m.tipo === 'entrada');
+      const salida = [...marcas].reverse().find(m => m.tipo === 'salida');
+      let trabajadas = 0;
+      if (entrada && salida && salida.marca > entrada.marca) trabajadas = horasEntreISO(entrada.marca, salida.marca);
+
+      const dow = diaSemanaISO(f);
+      const h = horarioPorEmpDia[`${emp.id}_${dow}`];
+      const programadas = h ? horasEntreHHMM(h.hora_entrada?.slice(0, 5), h.hora_salida?.slice(0, 5)) : 0;
+      const extra = Math.max(0, trabajadas - programadas);
+      const regular = Number((trabajadas - extra).toFixed(2));
+      regularPorDia.push(regular);
+      extraPorDia.push(Number(extra.toFixed(2)));
+
+      return [
+        i === 0 ? emp.nombre : '',
+        '',
+        formatFechaDDMMYYYY(f),
+        entrada ? formatHoraAMPM(entrada.marca) : '',
+        salida ? formatHoraAMPM(salida.marca) : '',
+        regular > 0 ? regular : '',
+        extra > 0 ? Number(extra.toFixed(2)) : '',
+        '', '', '', '',
+        null, // TOTAL DE HORAS: se llena como fórmula abajo
+      ];
+    });
+
+    const filaInicio = 2; // primera fila de datos en Excel (fila 1 = encabezado)
+    const filaFin = filaInicio + fechas.length - 1;
+    const filaTotal = filaFin + 1;
+    const filaTarifa = filaTotal + 1;
+    const suma = (arr) => Number(arr.reduce((a, b) => a + b, 0).toFixed(2));
+
+    const ws = XLSX.utils.aoa_to_sheet([ENCABEZADO_PLANILLA, ...filasDatos]);
+    for (let i = 0; i < fechas.length; i++) {
+      const fila = filaInicio + i;
+      ws[`L${fila}`] = { t: 'n', f: `SUM(F${fila}:K${fila})`, v: Number((regularPorDia[i] + extraPorDia[i]).toFixed(2)) };
+    }
+    const totalPorCol = { F: suma(regularPorDia), G: suma(extraPorDia), H: 0, I: 0, J: 0, K: 0 };
+    totalPorCol.L = Number(Object.values(totalPorCol).reduce((a, b) => a + b, 0).toFixed(2));
+    XLSX.utils.sheet_add_aoa(ws, [['TOTAL DE HORAS']], { origin: `A${filaTotal}` });
+    for (const col of ['F', 'G', 'H', 'I', 'J', 'K', 'L']) {
+      ws[`${col}${filaTotal}`] = { t: 'n', f: `SUM(${col}${filaInicio}:${col}${filaFin})`, v: totalPorCol[col] };
+    }
+    XLSX.utils.sheet_add_aoa(ws, [['TARIFA POR HORA']], { origin: `A${filaTarifa}` });
+    for (const [col, valor] of Object.entries(TARIFAS_DEFECTO)) {
+      ws[`${col}${filaTarifa}`] = { t: 'n', v: valor };
+    }
+    const totalPago = Object.entries(TARIFAS_DEFECTO).reduce((acc, [col, tarifa]) => acc + totalPorCol[col] * tarifa, 0);
+    ws[`L${filaTarifa}`] = {
+      t: 'n',
+      f: Object.keys(TARIFAS_DEFECTO).map(c => `${c}${filaTotal}*${c}${filaTarifa}`).join('+'),
+      v: Number(totalPago.toFixed(2)),
+    };
+    ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: filaTarifa - 1, c: 11 } });
+    ws['!cols'] = [{ wch: 26 }, { wch: 2 }, { wch: 11 }, { wch: 10 }, { wch: 10 }, { wch: 9 }, { wch: 9 }, { wch: 8 }, { wch: 9 }, { wch: 9 }, { wch: 10 }, { wch: 11 }];
+
+    let nombreHoja = emp.nombre.slice(0, 31).replace(/[\\/*?:[\]]/g, ' ').trim() || 'Empleado';
+    let sufijo = 2;
+    while (nombresUsados.has(nombreHoja)) nombreHoja = `${emp.nombre.slice(0, 28).trim()} ${sufijo++}`;
+    nombresUsados.add(nombreHoja);
+
+    XLSX.utils.book_append_sheet(wb, ws, nombreHoja);
+  }
+
+  XLSX.writeFile(wb, `planilla_pago_${desde}_a_${hasta}.xlsx`);
+  mostrarEstado('Planilla de pago exportada. Las tarifas por hora vienen con valores por defecto — ajústalas en Excel según cada empleado.', 'ok');
+});
 
 btnExportarReporte.addEventListener('click', () => {
   if (!ultimoReporte || ultimoReporte.length === 0) return;

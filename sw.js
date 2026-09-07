@@ -1,4 +1,4 @@
-const CACHE = 'asistencia-v11';
+const CACHE = 'asistencia-v12';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -11,7 +11,7 @@ const ARCHIVOS = [
   './reportes.js',
   './manifest.json',
   './icon-pc.png',
-  './pc.jpg',
+  './pc.png',
 ];
 
 self.addEventListener('install', (e) => {
