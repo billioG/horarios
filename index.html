@@ -22,9 +22,10 @@
 
   <div class="tabs">
     <button class="tab-btn activa" data-tab="marcar">Marcar</button>
-    <button class="tab-btn" data-tab="horarios">Horarios</button>
-    <button class="tab-btn" data-tab="reportes">Reportes</button>
+    <button class="tab-btn oculto" data-tab="horarios">Horarios</button>
+    <button class="tab-btn oculto" data-tab="reportes">Reportes</button>
   </div>
+  <button id="btn-acceso-encargado" class="link-encargado">🔒 Acceso de encargado</button>
 
   <!-- Tab: Marcar -->
   <div id="tab-marcar" class="tab-panel activa">
@@ -49,6 +50,12 @@
       <h2>Horario semanal por empleado</h2>
       <select id="horario-empleado"></select>
       <div id="filas-horario"></div>
+      <label class="label-descanso">Descanso diario (30 min)
+        <select id="horario-descanso">
+          <option value="corrido">30 min corridos</option>
+          <option value="dividido">15 min mañana + 15 min tarde</option>
+        </select>
+      </label>
       <button id="btn-guardar-horario">💾 Guardar horario</button>
     </div>
   </div>

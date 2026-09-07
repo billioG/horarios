@@ -5,6 +5,7 @@ const DIAS = [
 
 const selHorarioEmpleado = document.querySelector('#horario-empleado');
 const filasHorario = document.querySelector('#filas-horario');
+const selHorarioDescanso = document.querySelector('#horario-descanso');
 const btnGuardarHorario = document.querySelector('#btn-guardar-horario');
 
 async function cargarSelectorHorarios() {
@@ -24,6 +25,9 @@ async function cargarSelectorHorarios() {
 async function renderFilasHorario() {
   const empleadoId = selHorarioEmpleado.value;
   if (!empleadoId) return;
+  const empleados = await obtenerEmpleadosCache();
+  const empleado = empleados.find(e => e.id === empleadoId);
+  selHorarioDescanso.value = empleado?.descanso_tipo || 'corrido';
   let horarios = [];
   if (nubeDisponible()) {
     try { horarios = await nubeListarHorarios(empleadoId); await cachearHorarios(horarios); }
@@ -71,9 +75,13 @@ btnGuardarHorario.addEventListener('click', async () => {
       hora_salida: libre ? null : (fila.querySelector('.hora-salida').value || null),
     };
   });
+  const descansoTipo = selHorarioDescanso.value;
   try {
-    await nubeGuardarHorarios(empleadoId, dias, sesionActual);
+    await nubeGuardarHorarios(empleadoId, dias, descansoTipo, sesionActual);
     await cachearHorarios(dias.map(d => ({ ...d, empleado_id: empleadoId })));
+    const empleados = await obtenerEmpleadosCache();
+    const empleado = empleados.find(e => e.id === empleadoId);
+    if (empleado) await cachearEmpleados([{ ...empleado, descanso_tipo: descansoTipo }]);
     mostrarEstado('Horario guardado.', 'ok');
   } catch (err) {
     console.error(err);

@@ -324,29 +324,30 @@ vistaEmpleados.addEventListener('click', async (e) => {
 });
 
 // ---- Tabs ----
+function irATab(destino) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('activa'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('activa'));
+  document.querySelector(`.tab-btn[data-tab="${destino}"]`).classList.add('activa');
+  document.querySelector(`#tab-${destino}`).classList.add('activa');
+  if (destino === 'horarios') cargarSelectorHorarios();
+  if (destino === 'reportes') cargarSelectorReportes();
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const destino = btn.dataset.tab;
+  btn.addEventListener('click', () => irATab(btn.dataset.tab));
+});
 
-    if (destino === 'horarios' || destino === 'reportes') {
-      if (!nubeDisponible()) return mostrarEstado('Se necesita conexión para entrar a esta sección.', 'error');
-      if (!sesionActual) {
-        const emp = await identificarse(destino === 'horarios' ? 'PIN para editar horarios' : 'PIN para ver reportes');
-        if (!emp) return;
-        sesionActual = emp;
-      }
-      if (destino === 'horarios' && !sesionActual.es_encargado) {
-        return mostrarEstado('Solo el encargado puede editar horarios.', 'error');
-      }
-    }
-
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('activa'));
-    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('activa'));
-    btn.classList.add('activa');
-    document.querySelector(`#tab-${destino}`).classList.add('activa');
-    if (destino === 'horarios') cargarSelectorHorarios();
-    if (destino === 'reportes') cargarSelectorReportes();
-  });
+// ---- Acceso de encargado: Horarios y Reportes están ocultos hasta identificarse ----
+document.querySelector('#btn-acceso-encargado').addEventListener('click', async () => {
+  if (!nubeDisponible()) return mostrarEstado('Se necesita conexión para entrar a esta sección.', 'error');
+  const emp = await identificarse('PIN de encargado');
+  if (!emp) return;
+  if (!emp.es_encargado) return mostrarEstado('Ese PIN no pertenece a un encargado.', 'error');
+  sesionActual = emp;
+  document.querySelectorAll('.tab-btn[data-tab="horarios"], .tab-btn[data-tab="reportes"]').forEach(b => b.classList.remove('oculto'));
+  document.querySelector('#btn-acceso-encargado').classList.add('oculto');
+  mostrarEstado(`Acceso de encargado: ${emp.nombre}.`, 'ok');
+  irATab('horarios');
 });
 
 // ---- arranque ----

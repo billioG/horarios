@@ -35,8 +35,8 @@ async function nubeActualizarPin(id, pin) {
 }
 
 // ---- Horarios ----
-async function nubeGuardarHorarios(empleadoId, dias, autorizador) {
-  return llamarFuncion(`/horarios/${empleadoId}`, { method: 'PUT', body: JSON.stringify({ dias, autorizador }) });
+async function nubeGuardarHorarios(empleadoId, dias, descansoTipo, autorizador) {
+  return llamarFuncion(`/horarios/${empleadoId}`, { method: 'PUT', body: JSON.stringify({ dias, descanso_tipo: descansoTipo, autorizador }) });
 }
 async function nubeListarHorarios(empleadoId) {
   return llamarFuncion(`/horarios?empleado_id=${encodeURIComponent(empleadoId)}`);

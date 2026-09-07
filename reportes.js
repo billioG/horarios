@@ -5,20 +5,17 @@ const btnGenerarReporte = document.querySelector('#btn-generar-reporte');
 const btnExportarReporte = document.querySelector('#btn-exportar-reporte');
 const contenedorReporte = document.querySelector('#contenedor-reporte');
 
+const DESCANSO_HORAS = 0.5; // 30 min de descanso diario (corrido o dividido 15+15, configurable por empleado en Horarios), descontados de las horas trabajadas.
+
 let ultimoReporte = null; // guarda filas para exportar CSV
 let ultimoCrudo = null; // { registros, horarios, empleados, desde, hasta } — para exportar la planilla XLSX
 
 async function cargarSelectorReportes() {
-  if (!sesionActual.es_encargado) {
-    // Empleado normal: solo su propio reporte, sin selector.
-    selReporteEmpleado.innerHTML = `<option value="${sesionActual.id}">${sesionActual.nombre} (tú)</option>`;
-    selReporteEmpleado.disabled = true;
-  } else {
-    const empleados = await obtenerEmpleadosCache();
-    selReporteEmpleado.disabled = false;
-    selReporteEmpleado.innerHTML = '<option value="">Todos</option>' +
-      empleados.sort((a, b) => a.nombre.localeCompare(b.nombre)).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
-  }
+  // Solo el encargado llega a esta pestaña (ver app.js: Acceso de encargado).
+  const empleados = await obtenerEmpleadosCache();
+  selReporteEmpleado.disabled = false;
+  selReporteEmpleado.innerHTML = '<option value="">Todos</option>' +
+    empleados.sort((a, b) => a.nombre.localeCompare(b.nombre)).map(e => `<option value="${e.id}">${e.nombre}</option>`).join('');
 
   if (!inputHasta.value) {
     const hoy = new Date();
@@ -100,17 +97,18 @@ async function generarReporte() {
       }
     }
     if (entradaPendiente) abierto = true;
+    const trabajadasNeta = trabajadas > 0 ? Math.max(0, trabajadas - DESCANSO_HORAS) : 0;
 
     const dow = diaSemanaISO(g.fecha);
     const h = horarioPorEmpleadoDia[`${g.empleado_id}_${dow}`];
     const programadas = h ? horasEntreHHMM(h.hora_entrada?.slice(0, 5), h.hora_salida?.slice(0, 5)) : 0;
-    const extra = Math.max(0, trabajadas - programadas);
+    const extra = Math.max(0, trabajadasNeta - programadas);
 
     filas.push({
       fecha: g.fecha,
       empleado: nombrePorId[g.empleado_id] || '(eliminado)',
       marcas: horasTexto.join('  '),
-      trabajadas, programadas, extra, abierto,
+      trabajadas: trabajadasNeta, programadas, extra, abierto,
     });
   }
   filas.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.empleado.localeCompare(b.empleado));
@@ -155,7 +153,7 @@ function renderReporte(filas) {
     </div>
     ${filasHtml}
     <div class="resumen-reporte"><h3>Resumen del rango</h3>${resumenHtml}</div>
-    <p class="nota-reporte">⚠️ = turno sin salida marcada todavía. "Extra" = horas trabajadas por encima del horario configurado ese día (día sin horario configurado cuenta todo como extra).</p>
+    <p class="nota-reporte">⚠️ = turno sin salida marcada todavía. Las horas ya tienen descontados los 30 min de descanso diario. "Extra" = horas trabajadas por encima del horario configurado ese día (día sin horario configurado cuenta todo como extra).</p>
   `;
 }
 
@@ -215,13 +213,15 @@ btnExportarPlanilla.addEventListener('click', () => {
       (marcasPorFecha[f] ??= []).push(r);
     }
 
-    const regularPorDia = [], extraPorDia = [];
+    const regularPorDia = [], extraPorDia = [], almuerzoPorDia = [];
     const filasDatos = fechas.map((f, i) => {
       const marcas = (marcasPorFecha[f] || []).sort((a, b) => a.marca.localeCompare(b.marca));
       const entrada = marcas.find(m => m.tipo === 'entrada');
       const salida = [...marcas].reverse().find(m => m.tipo === 'salida');
-      let trabajadas = 0;
-      if (entrada && salida && salida.marca > entrada.marca) trabajadas = horasEntreISO(entrada.marca, salida.marca);
+      let trabajadasBruto = 0;
+      if (entrada && salida && salida.marca > entrada.marca) trabajadasBruto = horasEntreISO(entrada.marca, salida.marca);
+      const almuerzo = trabajadasBruto > 0 ? DESCANSO_HORAS : 0;
+      const trabajadas = Math.max(0, trabajadasBruto - almuerzo);
 
       const dow = diaSemanaISO(f);
       const h = horarioPorEmpDia[`${emp.id}_${dow}`];
@@ -230,6 +230,7 @@ btnExportarPlanilla.addEventListener('click', () => {
       const regular = Number((trabajadas - extra).toFixed(2));
       regularPorDia.push(regular);
       extraPorDia.push(Number(extra.toFixed(2)));
+      almuerzoPorDia.push(Number(almuerzo.toFixed(2)));
 
       return [
         i === 0 ? emp.nombre : '',
@@ -239,7 +240,9 @@ btnExportarPlanilla.addEventListener('click', () => {
         salida ? formatHoraAMPM(salida.marca) : '',
         regular > 0 ? regular : '',
         extra > 0 ? Number(extra.toFixed(2)) : '',
-        '', '', '', '',
+        '', '',
+        '',
+        almuerzo > 0 ? almuerzo : '',
         null, // TOTAL DE HORAS: se llena como fórmula abajo
       ];
     });
@@ -253,9 +256,9 @@ btnExportarPlanilla.addEventListener('click', () => {
     const ws = XLSX.utils.aoa_to_sheet([ENCABEZADO_PLANILLA, ...filasDatos]);
     for (let i = 0; i < fechas.length; i++) {
       const fila = filaInicio + i;
-      ws[`L${fila}`] = { t: 'n', f: `SUM(F${fila}:K${fila})`, v: Number((regularPorDia[i] + extraPorDia[i]).toFixed(2)) };
+      ws[`L${fila}`] = { t: 'n', f: `SUM(F${fila}:K${fila})`, v: Number((regularPorDia[i] + extraPorDia[i] + almuerzoPorDia[i]).toFixed(2)) };
     }
-    const totalPorCol = { F: suma(regularPorDia), G: suma(extraPorDia), H: 0, I: 0, J: 0, K: 0 };
+    const totalPorCol = { F: suma(regularPorDia), G: suma(extraPorDia), H: 0, I: 0, J: 0, K: suma(almuerzoPorDia) };
     totalPorCol.L = Number(Object.values(totalPorCol).reduce((a, b) => a + b, 0).toFixed(2));
     XLSX.utils.sheet_add_aoa(ws, [['TOTAL DE HORAS']], { origin: `A${filaTotal}` });
     for (const col of ['F', 'G', 'H', 'I', 'J', 'K', 'L']) {

@@ -1,4 +1,4 @@
-const CACHE = 'asistencia-v12';
+const CACHE = 'asistencia-v14';
 const ARCHIVOS = [
   './',
   './index.html',
@@ -15,8 +15,16 @@ const ARCHIVOS = [
 ];
 
 self.addEventListener('install', (e) => {
+  // fetch manual con {cache:'reload'} en vez de cache.addAll: así la instalación
+  // siempre trae los archivos frescos del servidor, sin arriesgarse a que el
+  // caché HTTP normal del navegador (otra capa, distinta a esta Cache Storage)
+  // le sirva una copia vieja de algún archivo.
   e.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(ARCHIVOS)).then(() => self.skipWaiting())
+    caches.open(CACHE)
+      .then((cache) => Promise.all(ARCHIVOS.map((url) =>
+        fetch(url, { cache: 'reload' }).then((resp) => cache.put(url, resp))
+      )))
+      .then(() => self.skipWaiting())
   );
 });
 
